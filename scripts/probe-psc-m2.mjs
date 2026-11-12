@@ -146,7 +146,7 @@ async function main() {
   /* dashboard/overview：随访第 N 天从 startedAt 锚点算，不手填 */
   const ov = await go('dashboard/overview')
   const dayN = expectedDaysSince('2026-10-21')
-  t('OV1', 'dashboard/overview 状态卡锚点派生：随访第 N 天 = 距开始用药日天数', ov.text.includes(`随访第 ${dayN} 天`) && ov.text.includes(`D+${dayN}`) && ov.text.includes('锚点 2026-10-21'), { expectedDay: dayN })
+  t('OV1', 'dashboard/overview 状态卡锚点派生：随访第 N 天 = 距开始用药日天数', ov.text.includes(`随访第 ${dayN} 天`) && ov.text.includes('锚点 2026-10-21'), { expectedDay: dayN })
   /* dashboard/next：参考节点 = 起点 +6 个月（只列今天之后） */
   const nx = await go('dashboard/next')
   const node6 = expectedCadenceNode('2026-10-21', 6)
@@ -313,7 +313,7 @@ async function main() {
   await page.evaluate(() => {
     window.__drafts__ = []
     window.__msgs__ = []
-    document.addEventListener('pbc:agent-draft', (e) => window.__drafts__.push({ prompt: e.detail && e.detail.prompt, context: e.detail && e.detail.context, channel: e.detail && e.detail.channel }))
+    document.addEventListener('psc:agent-draft', (e) => window.__drafts__.push({ prompt: e.detail && e.detail.prompt, context: e.detail && e.detail.context, channel: e.detail && e.detail.channel }))
     window.addEventListener('message', (e) => window.__msgs__.push(e.data && e.data.type))
   })
   await go('labs/cards')
@@ -326,7 +326,7 @@ async function main() {
     drafts: window.__drafts__,
     msgs: window.__msgs__
   }))
-  t('Q14', '页面「AI 帮我填」派发本地草稿事件（prompt+context 到 pbc:agent-draft）', draft.drafts.length === 1 && draft.drafts[0].prompt.includes('化验') && draft.drafts[0].context.includes('档案 A'), draft.drafts[0] ? draft.drafts[0].prompt : draft.drafts)
+  t('Q14', '页面「AI 帮我填」派发本地草稿事件（prompt+context 到 psc:agent-draft）', draft.drafts.length === 1 && draft.drafts[0].prompt.includes('化验') && draft.drafts[0].context.includes('档案 A'), draft.drafts[0] ? draft.drafts[0].prompt : draft.drafts)
   t('Q17', '草稿只填不发（独立打开无 postMessage、无私密上下文泄漏）', draft.msgs.length === 0 && !draft.drafts[0].context.includes('【私密注入】'), { msgs: draft.msgs })
   t('Q19b', '独立打开时文案诚实：明说「没有会话面板」（原型态不假装已接通）', !draft.toastHidden && draft.toastText.includes('独立打开时没有会话面板'), { toast: draft.toastText })
   await page.click('#btn-ai')

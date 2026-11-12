@@ -3,7 +3,7 @@
   'use strict'
   const DEMO = window.DEMO
   const VERSION = 'v0.1.0'
-  const EVT_DRAFT = 'pbc:agent-draft'
+  const EVT_DRAFT = 'psc:agent-draft'
 
   const NAV = [
     { id: 'dashboard', label: '看板', subs: [['overview', '今日概览'], ['next', '接下来'], ['changes', '最近变化']] },
@@ -330,7 +330,7 @@
       <div class="card">
         <div class="card-head"><span class="muted">${dayN == null
           ? '状态卡 · 还没有起点日期'
-          : `D+${dayN} 状态卡 · ${next ? `距参考节点 ${next.days} 天` : '暂无参考节点'}`}</span></div>
+          : `随访第 ${dayN} 天 · · ${next ? `距参考节点 ${next.days} 天` : '暂无参考节点'}`}</span></div>
         <div style="font-size:28px;font-weight:700;color:var(--brand);line-height:1.2">${dayN == null ? '还没有起点日期' : `随访第 ${dayN} 天`}</div>
         <p class="muted" style="margin-top:4px">${dayN == null
           ? '这个数字由你记的「开始用药日」算出来。去「我的病底」补上日期后，这里会显示随访第 N 天和下一个参考节点（工作台不推断病程）。'
@@ -1543,7 +1543,7 @@
   function bindShell() {
     $('#btn-ai').addEventListener('click', () => {
       if (window.parent === window) return toast('独立打开时没有会话面板：在 DSH Desktop 里打开工作台即可对话')
-      try { window.parent.postMessage({ type: 'pbc:agent-open' }, window.location.origin) } catch (e) { toast('没能请出会话面板') }
+      try { window.parent.postMessage({ type: 'psc:agent-open' }, window.location.origin) } catch (e) { toast('没能请出会话面板') }
     })
     $('#profile-btn').addEventListener('click', () => {
       state.profileKey = state.profileKey === 'A' ? 'B' : 'A'
