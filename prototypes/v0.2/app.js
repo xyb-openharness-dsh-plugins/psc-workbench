@@ -690,7 +690,7 @@
     const dates = p.labs.map((r) => r.date)
     const xs = (i) => padL + (i * (w - padL - padR)) / Math.max(dates.length - 1, 1)
     const colors = CHART_COLORS
-    const lines = codes.map((code) => {
+    const lines = codes.map((code, si) => {
       const s = seriesFor(p, code)
       const vals = s.map((x) => x.value)
       const min = Math.min(...vals), max = Math.max(...vals)
@@ -701,7 +701,7 @@
       const lastVal = s[s.length - 1].value
       return {
         code, d, pts, color: colors[code] || '#555',
-        label: `<text x="${Math.min(last.x + 6, w - padR - 24).toFixed(1)}" y="${(last.y - 8).toFixed(1)}" font-size="11" fill="${colors[code] || '#555'}">${code} ${lastVal}</text>`,
+        label: `<text x="${(w - padR - 4).toFixed(1)}" y="${(last.y - 8 - si * 14).toFixed(1)}" font-size="11" fill="${colors[code] || '#555'}" text-anchor="end">${code} ${lastVal}</text>`,
       }
     })
     const gridY = [0, 1, 2, 3].map((i) => `<line x1="${padL}" x2="${w - padR}" y1="${padT + (i * (h - padT - padB)) / 3}" y2="${padT + (i * (h - padT - padB)) / 3}" stroke="#E2E0D3" stroke-width="1"/>`).join('')
