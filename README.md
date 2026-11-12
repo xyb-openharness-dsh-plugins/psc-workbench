@@ -1,44 +1,66 @@
 # 小胆宝 DuctPal 原发性硬化性胆管炎（PSC）工作台（品牌占位）
 
-本机优先的 PSC 确诊档案、肝功能化验随访、胆管炎发作—缓解记录、MRCP/肠镜影像与共病监测、瘙痒乏力症状与用药、移植评估材料准备工作台
+本机优先的 PSC 确诊档案、肝功能化验随访、胆管炎发作—缓解记录、MRCP/肠镜筛查随访、瘙痒乏力症状与用药、复诊材料准备工作台。
 
-这是接入骨架，尚未实现真实业务。初始化后先将 [项目设计提示词](docs/DESIGN-PROMPT.md) 交给当前Agent；它应展示实际路径并以已有用户/场景/流程素材对齐设计者、研究与取舍原则。癌种项目另有 [完整专用提示词](prompts/NEW-CANCER-WORKBENCH.md)。需求见 [BRIEF](docs/BRIEF.md)，规格见 [SPEC](docs/SPEC.md)，任务见 [TASKS](docs/TASKS.md)；先读 [AGENTS](AGENTS.md)。CLI输出交接与首问，实际对话由Agent接续。
+**0 患者访谈、0 临床审核**（如实标注）；所有医学阈值【待核】；判读归医生。演示数据为合成示例，未连接宿主。
 
-## 开发顺序
+## 疾病概要
 
-先共创SPEC和候选数据关系，再交付HTML交互工作台；由用户确认对应版本/模块后，复核SCHEMA/API并实现生产功能。确认记录见docs/PROTOTYPE-REVIEW.md；模型不依赖前端Tab/流程。模板骨架不是业务已确认。
+原发性硬化性胆管炎（PSC，Primary Sclerosing Cholangitis）是一种慢性胆汁淤积性肝病，已列入中国第二批罕见病目录（序号 68）。本工作台面向已确诊的成人患者本人与家属照护者，围绕四类患者关心的事组织：**化验趋势**（不同方法/机构不合并）、**发作与缓解**（一次发作一个折叠单元）、**筛查随访**（医生已安排的条目，无风险判读）、**症状与用药**（患者语言原文记录）。点顶栏「?」看疾病概要四段（定义 / 医学资料规范和指南情况 / 治疗全景 / 发展趋势），每段带来源行。
 
-## 当前能力
+## 关键功能（实渲截图，prototypes/v0.2 v0.1.0）
 
-- 一个 DSH 工作台注册、认证的健康接口、版本展示与标准/大字切换。
-- 已明确选择布局：business-first。business-first 使用 customFrame；模板不创建会话或复制聊天。需要 AI 协助时按官方合同接入原生 conversation 和会话管理。
-- 无业务数据库、无演示患者、无真实密钥；所有业务页按确认 spec 逐项实现。
+### 看板 · 两套合成档案（A 刚确诊记录少 / B 长期随访发作多，切换整页联动不串档）
 
-## 开发与本地验收
+![看板档案A](assets/screenshots/v0.1.0-dashboard-A.png)
+档案 A · 刚确诊：随访第 N 天、确诊依据入口、化验速览。
 
-需要 Node.js 22+、Git、包管理器和可用 DSH Desktop；采用 SQLite 时另核验 node:sqlite 版本条件。宿主 peers 的范围仅是模板基线，请与目标 Desktop 实际依赖核对。
+![看板档案B](assets/screenshots/v0.1.0-dashboard-B.png)
+档案 B · 长期随访：8 年随访、3 次发作、3 种用药，切换后全页数据跟着换。
+
+### 发作与缓解 · 区间带（PSC 专属线）
+
+![发作时间线](assets/screenshots/v0.1.0-episodes-timeline-B.png)
+一次发作一条区间带；「近 90 天发作 N 次」读时算、不落库；医生行动计划逐字照录。
+
+### 化验 · 一图秀（不同方法/机构不合并）
+
+![一图秀](assets/screenshots/v0.1.0-onechart.png)
+ALP/GGT/胆红素三条线各自按全期归一化，末点标注、来源行同屏；单据没印上限就如实留空。
+
+### 疾病概要（整页四段，非肿瘤固定出口）
+
+![疾病概要](assets/screenshots/v0.1.0-disease-primer.png)
+定义 → 指南情况 → 治疗全景 → 发展趋势；按受累器官与病情轻重排列，不代表任何一项适合你。
+
+### 发作折叠卡 · 收起/展开态
+
+![折叠收起](assets/screenshots/v0.1.0-fold-collapsed.png)
+![折叠展开](assets/screenshots/v0.1.0-fold-expanded.png)
+原生 `<details>` 折叠；空态给下一步按钮。
+
+## 怎么用
+
+1. DSH Desktop 安装本包（M6 装机验证进行中；未装机前可直接双击打开 `prototypes/v0.2/index.html` 预览原型）。
+2. 顶栏「配置资料目录」选择本机目录（主目录/桌面/下载根/tmp 不作资料目录）。
+3. 「＋ 新建档案」建立自己的档案；演示档案标「[演示]」，只读可切换。
+4. 顶栏「AI 对话」走宿主原生会话；页面内「和 AI 讨论」按钮把本页关键信息填进输入框草稿（只填不发）。
+
+## 数据与口径
+
+- 演示数据唯一源：`demo/build-demo-data.mjs` → `prototypes/v0.2/demo-data.js`（重跑 `node demo/build-demo-data.mjs`）。
+- 真实库：SQLite（`schema/0001_initial.sql`，19 表，冻结 sha256 见 `schema/freeze-contract.md`）。
+- 私密三出口（看板摘要/导出/AI 上下文）共用同一过滤函数；更正=新增版本，不覆盖。
+- 临床试验线：`research/psc/` 快照 220 条（manifest=jsonl=sqlite 三处对账一致）；chictr_online 失败如实记录于 `research/psc/FAILED.md`。
+- 全站口径：「仅回顾，不解读」「解读归医生」「不同方法不合并」。
+
+## 开发
 
 ```bash
 npm install
-npm run check
-npm run pack:check
-npm pack
+npm run check     # 静态包合同 + 检查链
+npm test          # 十套单测
+npm run audit     # 家族一致性
 ```
 
-`npm run check` 只保证"能装"（语法 + 装包合同），第一天就该是绿的。`npm run audit` 管"还是不是家族里的一员"：版本三处一致、`lib/layout.js` 面板参数单一来源、检查链完整、文档与密钥卫生，**只看代码与文件，不看文档自述**。新项目刚生成时 audit 必然有 fail，那是待办清单；交付/发布前必须清零，存在 fail 不得发布（`npm run release:check` 一次跑完两者）。
-
-跑的时间点：**每次改完**跑 `check`；**G2 原型确认后、写业务代码前**先跑一次 `audit`（这时缺的多是 `lib/layout.js`、`VERSION` 这类结构，越早补越便宜）；**交付/装机前**必须跑 `release:check`；**发布或投稿前**把 `npm run audit --json` 的 `xx/xx 通过 · N 失败 · M 待人工` 抄进 `docs/RELEASE.md` 的「家族一致性」一行。`✗` 是结构缺口（补齐，或在 `docs/DEV-REQUIREMENTS-<日期>.md` 写明偏离理由并由用户确认），`!` 是需人工判断的项（逐条给「已人工确认 / 确实没有」）。
-
-`npm install` 可能按 npm 策略解析 peer；勿为消警告重复打包宿主 runtime。客户端本身是单文件；引入 TS/组件库后需添加构建步骤并保留单文件导出。
-
-本地安装入口以当前 Desktop/CLI 帮助为准。安装后按 [docs/06-VALIDATION-AND-RELEASE.md](docs/06-VALIDATION-AND-RELEASE.md) 与官方自测完成真实 UI 验收，并填写 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。静态检查不代表已加载。
-
-Logo 来源与使用限制见 assets/README.md。许可证、作者、仓库/发布策略由本项目维护者确认后填写；模板默认为 private/UNLICENSED。
-
-感谢小x宝社区、DataElement 社区，以及 sam / hhx / 繁华的 ❤️ 贡献。
-
-初始化来源记录见 `.dsh-wb-starter.json`。更新社区脚手架不会覆盖本项目；需要升级时先用相同确认配置在临时目录生成，再审阅差异。CLI 用法见 [docs/CLI-GIT.md](docs/CLI-GIT.md)。
-
-## HTML先行与数据演进
-
-业务开发前先交付HTML交互工作台原型、实际预览并由用户确认版本/hash和范围。数据设计先区分领域事实、流程状态和页面读模型，走查前端/流程变化、兼容与迁移；原型对象不直接作为表。见[规范](docs/14-HTML-AND-DATA-CONTRACT.md)。
+里程碑与闸口记录见 `PROGRESS.md` 与 `docs/signoffs/`；0 患者访谈、0 临床审核、装机未验证项分别在 `docs/signoffs/` 与晨审报告如实标注。当前版本 0.1.0（原型阶段，v0.1.0 截图）；版本同源链见 `docs/DEV-REQUIREMENTS.md` §七。
