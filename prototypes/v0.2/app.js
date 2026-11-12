@@ -156,6 +156,9 @@
   }
   const profile = () => DEMO.profiles.find((p) => p.key === state.profileKey)
   const allSymptoms = () => state.localSymptoms.concat(profile().symptoms).sort((a, b) => (a.date < b.date ? 1 : -1))
+  /* 私密三出口共用同一过滤（看板摘要 / 导出预览 / AI 上下文）：
+     visibility === 'private' 的记录不进任何对外出口；本机「我的记录」仍对自己可见。 */
+  const sharedOnly = (list) => list.filter((x) => x && x.visibility !== 'private')
 
   /* ------------------------------ 顶栏 / 导航 ------------------------------ */
   function renderShell() {
@@ -220,6 +223,31 @@
     }
     bindViewEvents()
   }
+
+  /* ------------------------------ hash 路由（#view/sub） ------------------------------
+   * 视图切换仍以 state.view/state.sub + render() 为准；hash 只做入口与同步：
+   * 手输 / 深链 '#episodes/list' 直达对应子页；导航点击把当前视图写回 hash。
+   * 非法 hash 不劫持：整页视图 '#page-view' 与整页深链 '#page=labs' 都不是子页路由。 */
+  function applyHash() {
+    const h = (location.hash || '').replace(/^#/, '')
+    if (!h || h === 'page-view' || h.startsWith('page=')) return
+    if (VIEWS[h]) {
+      const i = h.indexOf('/')
+      state.view = i < 0 ? h : h.slice(0, i)
+      if (i < 0) {
+        const nav = NAV.find((n) => n.id === h)
+        state.sub = nav ? nav.subs[0][0] : state.sub
+      } else {
+        state.sub = h.slice(i + 1)
+      }
+      render()
+    }
+  }
+  function syncHash() {
+    const h = '#' + state.view + '/' + state.sub
+    if (location.hash !== h) { try { location.hash = h } catch (e) { /* 个别环境拒绝写 hash */ } }
+  }
+  window.addEventListener('hashchange', applyHash)
 
   /* ------------------------------ 公用片段 ------------------------------ */
   function aiButton(prompt, ctxLabel) {
@@ -292,7 +320,7 @@
        缺一条数据就抛错，整块业务区变空白——看起来就是"这个工作台没有界面"。 */
     const lastLabs = p.labs.length ? p.labs[p.labs.length - 1] : null
     const alp = lastLabs ? lastLabs.items.find((i) => i.code === 'ALP') : null
-    const lastSym = allSymptoms()[0]
+    const lastSym = sharedOnly(allSymptoms())[0]
     const answers = p.questions.filter((q) => !q.done).length
     const anchor = p.startedAt || ''
     const dayN = anchor ? daysSince(anchor) : null
@@ -435,13 +463,16 @@
 
   function vBasicsFibrosis() {
     const p = profile()
+    /* 刚确诊的档案可能还没有弹性/影像检查（fibrosis = null）：如实写「未记录」，
+       不能因为缺一块数据让整页画不出来。 */
+    const f = p.fibrosis || {}
     return `
       <div class="card">
         <div class="card-head"><span class="card-title">纤维化与影像</span></div>
-        ${kv('检查方式', esc(p.fibrosis.method), '不同方式的结果不互相换算')}
-        ${kv('结果原文', esc(p.fibrosis.value))}
-        ${kv('日期', esc(p.fibrosis.date))}
-        <p class="muted" style="margin-top:8px">${esc(p.fibrosis.note)}。工作台**不判断纤维化分期**，也不把弹性值换算成分级。</p>
+        ${kv('检查方式', f.method ? esc(f.method) : '未记录', '不同方式的结果不互相换算')}
+        ${kv('结果原文', f.value ? esc(f.value) : '还没有记录')}
+        ${kv('日期', f.date ? esc(f.date) : '未记录')}
+        <p class="muted" style="margin-top:8px">${f.note ? esc(f.note) + '。' : '本档案还没有弹性或影像检查记录。'}工作台**不判断纤维化分期**，也不把弹性值换算成分级。</p>
       </div>`
   }
 
@@ -497,7 +528,7 @@
           <div style="margin-bottom:10px">
             <div class="muted" style="font-size:12.5px">${esc(e.start)}${e.end ? ' — ' + esc(e.end) : '（缓解未记录）'} · ${esc(e.hospital || '医院未记')}</div>
             ${band(e)}
-          </div>`).join('') : emptyState('时间线还没有内容', '有发作记录后，这里按"发作—缓解"区间展示。', '去看发作记录', "location.hash='#episodes/list';state.view='episodes';state.sub='list';render()")}
+          </div>`).join('') : emptyState('时间线还没有内容', '有发作记录后，这里按"发作—缓解"区间展示。', '去看发作记录', "location.hash='#episodes/list'")}
         <p class="muted" style="margin-top:8px">区间带表示"发作开始到缓解"的日期事实，不表示病情轻重。</p>
       </div>`
   }
@@ -1103,7 +1134,7 @@
         <div class="card-head"><span class="card-title">用来对照的病理特点</span><span class="muted">每一项都来自你的记录；没记的写「未记录」</span></div>
         <div class="fact-grid">${([
           ['pANCA（参考）', p.antibodies.panca === 'positive' ? '阳性' : p.antibodies.panca === 'negative' ? '阴性' : '未检测', p.antibodies.note || '未记录'],
-          ['纤维化 / 影像', p.fibrosis.value, p.fibrosis.date + ' · ' + p.fibrosis.method],
+          ['纤维化 / 影像', p.fibrosis ? p.fibrosis.value : '未记录', p.fibrosis ? p.fibrosis.date + ' · ' + p.fibrosis.method : '—'],
           ['最近 ALP', `${lastLab('ALP')?.value ?? '未记录'} U/L`, lastLab('ALP') ? `${lastLab('ALP').lab} · ${lastLab('ALP').refHigh == null ? '本单未印上限' : '上限 ' + lastLab('ALP').refHigh}` : '—'],
           ['最近总胆红素', `${lastLab('TBil')?.value ?? '未记录'} μmol/L`, lastLab('TBil') ? `上限 ${lastLab('TBil').refHigh ?? '未印'}` : '—'],
           ['最近血小板', `${lastLab('PLT')?.value ?? '未记录'} ×10⁹/L`, lastLab('PLT') ? `下限 ${lastLab('PLT').refLow ?? '未印'}` : '—'],
@@ -1143,7 +1174,7 @@
         <div class="card-head"><span class="card-title">口径</span></div>
         <ul class="list">
           <li><span class="muted">登记状态，未核实；登记 ≠ 有效 ≠ 安全 ≠ 可入组。</span></li>
-          <li><span class="muted">不产出"匹配度 87%"这类综合分——数值化会把"沾到几个词"伪装成"你符合条件"。</span></li>
+          <li><span class="muted">不产出任何"按百分比对候选打分"式的综合分——数值化会把"沾到几个词"伪装成"你符合条件"。</span></li>
           <li><span class="muted">工作台不写"建议参加 / 适合你"；AI 只帮你整理命中证据与要问医生的问题。</span></li>
         </ul>
       </div>`
@@ -1212,12 +1243,12 @@
     $$('[data-view]').forEach((b) => b.addEventListener('click', () => {
       state.view = b.dataset.view
       state.sub = NAV.find((n) => n.id === state.view).subs[0][0]
-      render()
+      render(); syncHash()
     }))
-    $$('[data-sub]').forEach((b) => b.addEventListener('click', () => { state.sub = b.dataset.sub; render() }))
+    $$('[data-sub]').forEach((b) => b.addEventListener('click', () => { state.sub = b.dataset.sub; render(); syncHash() }))
     $$('[data-goto]').forEach((b) => b.addEventListener('click', () => {
       const [v, s] = b.dataset.goto.split('/')
-      state.view = v; state.sub = s; render()
+      state.view = v; state.sub = s; render(); syncHash()
     }))
     const doMatch = $('#do-match')
     if (doMatch) doMatch.addEventListener('click', () => {
@@ -1275,7 +1306,7 @@
       }
       state.localSymptoms.unshift(s)
       toast('已记下这一次（演示：仅本页内存，不落库）')
-      state.view = 'symptoms'; state.sub = 'log'; render()
+      state.view = 'symptoms'; state.sub = 'log'; render(); syncHash()
     })
     const itch = $('#itch')
     if (itch) itch.addEventListener('input', () => { $('#itch-out').textContent = itch.value; state.draft.itch = Number(itch.value) })
@@ -1305,6 +1336,10 @@
     if (doExport) doExport.addEventListener('click', () => {
       const p = profile()
       const last = p.labs[p.labs.length - 1]
+      /* 私密出口②导出预览：与看板摘要、AI 上下文共用 sharedOnly 同一过滤——
+         visibility === 'private' 的记录不进快照，并给出条数说明。 */
+      const allSym = allSymptoms()
+      const sharedSym = sharedOnly(allSym)
       const txt = [
         `小胆宝 DuctPal 就诊快照（合成示例）`,
         `档案：${p.label} · 生成时间：2026-10-25 · 数据截止：${last.date}`,
@@ -1316,16 +1351,25 @@
         `【当前用药】`,
         ...p.meds.map((m) => `- ${m.name} ${m.doseText}（${m.freq}）获批状态未核实`),
         '',
+        `【感受记录】`,
+        ...(sharedSym.length ? sharedSym.map((s) => `- ${s.date} 痒 ${s.itch == null ? '未记' : s.itch}/10 · 累 ${s.fatigue == null ? '未记' : s.fatigue}/3${s.note ? ' · ' + s.note : ''}`) : ['- 无']),
+        '',
         `【待问医生】`,
         ...p.questions.filter((q) => !q.done).map((q) => `- ${q.text}`),
+        ...(allSym.length > sharedSym.length ? ['', `已排除私密 ${allSym.length - sharedSym.length} 条（私密标记的记录不进导出）。`] : []),
       ].join('\n')
-      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `DuctPal-就诊快照-PSC.txt`
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 2000)
-      toast('已生成快照文件')
+      /* 快照先整页预览再下载：下载按钮在预览层里，核对无误后自己点。 */
+      openPvLayer('导出预览', `<div class="card"><h3>就诊快照预览</h3><pre class="snapshot-pre" style="white-space:pre-wrap;font-size:12.5px;line-height:1.7">${esc(txt)}</pre><div class="actions-row" style="margin-top:10px"><button class="btn" type="button" id="download-snapshot">下载快照文件</button></div><p class="muted" style="margin-top:6px">私密标记的记录不会进快照；下载前请再核对一遍。</p></div>`, false, doExport)
+      const dl = document.querySelector('#download-snapshot')
+      if (dl) dl.addEventListener('click', () => {
+        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `DuctPal-就诊快照-PSC.txt`
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+        toast('已生成快照文件')
+      })
     })
     const pageBtn = $('[data-page]')
     if (pageBtn) pageBtn.addEventListener('click', () => openPvLayer('诊断与检查 · 完整记录', basicsPage(), false, pageBtn))
@@ -1335,7 +1379,7 @@
     const p = profile()
     const last = p.labs[p.labs.length - 1]
     const alp = last.items.find((i) => i.code === 'ALP')
-    return `${p.label}｜确诊 ${p.diagnosedAt}｜最近化验 ${last.date}：ALP ${alp.value} U/L（${alp.refHigh ? pct(alp.value / alp.refHigh) + '×ULN' : '无上限'}）｜最近感受：痒 ${allSymptoms()[0]?.itch ?? '—'}/10`
+    return `${p.label}｜确诊 ${p.diagnosedAt}｜最近化验 ${last.date}：ALP ${alp.value} U/L（${alp.refHigh ? pct(alp.value / alp.refHigh) + '×ULN' : '无上限'}）｜最近感受：痒 ${sharedOnly(allSymptoms())[0]?.itch ?? '—'}/10`
   }
 
   /* ------------------------------ 整页视图（32 号） ------------------------------ */
@@ -1564,6 +1608,82 @@
     render()
     /* 整页视图深链：#page=labs 直达「化验记录」层（starter probe 契约） */
     if (location.hash.startsWith('#page=labs')) openPvLayer('化验记录', labsLayerHtml(), true, null)
+    /* 子页路由深链：#view/sub（如 #episodes/list）直达对应视图 */
+    applyHash()
   }
   document.addEventListener('DOMContentLoaded', boot)
+
+  /* 探针 / 测试入口（与 cidp 家族 __CIDP_APP__ 同位）：读 state、显式重渲染，不绕过 UI 事件 */
+  window.__PSC_APP__ = { state, profile, render, allSymptoms, sharedOnly, draftContext, VIEWS, applyHash }
 })()
+
+/* 路由表（顶层，供 check-probe-coverage 穷举孤儿页）：'view/sub' → page* 渲染薄壳。
+ * 运行时导航走 IIFE 内 VIEWS + hash；此处薄壳只为让检查器把键解析出来，调用时经
+ * window.__PSC_APP__ 真渲染，保持"表里的每一条都真存在"而不是空名单。 */
+function pv(route) { return window.__PSC_APP__.render ? window.__PSC_APP__.render(route) : '' }
+function pageDashboardOverview() { return pv('dashboard/overview') }
+function pageDashboardNext() { return pv('dashboard/next') }
+function pageDashboardChanges() { return pv('dashboard/changes') }
+function pageBasicsDiagnosis() { return pv('basics/diagnosis') }
+function pageBasicsFibrosis() { return pv('basics/fibrosis') }
+function pageBasicsComorbidity() { return pv('basics/comorbidity') }
+function pageEpisodesList() { return pv('episodes/list') }
+function pageEpisodesTimeline() { return pv('episodes/timeline') }
+function pageTreatmentCurrent() { return pv('treatment/current') }
+function pageTreatmentPathway() { return pv('treatment/pathway') }
+function pageTreatmentSideeffects() { return pv('treatment/sideeffects') }
+function pageLabsCards() { return pv('labs/cards') }
+function pageLabsChart() { return pv('labs/chart') }
+function pageLabsGrading() { return pv('labs/grading') }
+function pageSymptomsItch() { return pv('symptoms/itch') }
+function pageSymptomsFatigue() { return pv('symptoms/fatigue') }
+function pageSymptomsLog() { return pv('symptoms/log') }
+function pageSymptomsImpact() { return pv('symptoms/impact') }
+function pageScreeningColonoscopy() { return pv('screening/colonoscopy') }
+function pageScreeningMrcp() { return pv('screening/mrcp') }
+function pageScreeningFibroscan() { return pv('screening/fibroscan') }
+function pageScreeningGallbladder() { return pv('screening/gallbladder') }
+function pageScreeningEndoscopy() { return pv('screening/endoscopy') }
+function pageFollowupCadence() { return pv('followup/cadence') }
+function pageFollowupPrep() { return pv('followup/prep') }
+function pageFollowupTodos() { return pv('followup/todos') }
+function pageRecordsImport() { return pv('records/import') }
+function pageRecordsFiles() { return pv('records/files') }
+function pageRecordsExport() { return pv('records/export') }
+function pageTrialsSearch() { return pv('trials/search') }
+function pageTrialsSaved() { return pv('trials/saved') }
+function pageTrialsSources() { return pv('trials/sources') }
+const ROUTES = {
+  'dashboard/overview': pageDashboardOverview,
+  'dashboard/next': pageDashboardNext,
+  'dashboard/changes': pageDashboardChanges,
+  'basics/diagnosis': pageBasicsDiagnosis,
+  'basics/fibrosis': pageBasicsFibrosis,
+  'basics/comorbidity': pageBasicsComorbidity,
+  'episodes/list': pageEpisodesList,
+  'episodes/timeline': pageEpisodesTimeline,
+  'treatment/current': pageTreatmentCurrent,
+  'treatment/pathway': pageTreatmentPathway,
+  'treatment/sideeffects': pageTreatmentSideeffects,
+  'labs/cards': pageLabsCards,
+  'labs/chart': pageLabsChart,
+  'labs/grading': pageLabsGrading,
+  'symptoms/itch': pageSymptomsItch,
+  'symptoms/fatigue': pageSymptomsFatigue,
+  'symptoms/log': pageSymptomsLog,
+  'symptoms/impact': pageSymptomsImpact,
+  'screening/colonoscopy': pageScreeningColonoscopy,
+  'screening/mrcp': pageScreeningMrcp,
+  'screening/fibroscan': pageScreeningFibroscan,
+  'screening/gallbladder': pageScreeningGallbladder,
+  'screening/endoscopy': pageScreeningEndoscopy,
+  'followup/cadence': pageFollowupCadence,
+  'followup/prep': pageFollowupPrep,
+  'followup/todos': pageFollowupTodos,
+  'records/import': pageRecordsImport,
+  'records/files': pageRecordsFiles,
+  'records/export': pageRecordsExport,
+  'trials/search': pageTrialsSearch,
+  'trials/saved': pageTrialsSaved,
+  'trials/sources': pageTrialsSources,
+};
