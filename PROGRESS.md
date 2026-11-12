@@ -23,3 +23,11 @@
 - README：7 张实渲截图墙 v0.1.0
 - M5：开发版七步移植子代理进行中（dsh 栈/src→build→lib/public/test 十套/版本 0.2.0）
 - 下一步：M5 验收（check/test/audit/探针）→ V1 签认 → M6 装机尝试
+
+## 2026-11-13 06:20 · 夜班收班状态
+
+当前里程碑：M0–M6 完成；M7/M8 冻结草稿已备；M9 回流已推 starter（L101–L105）
+已完成：G1/G2/G3/V1/V2 自动签认（docs/signoffs/，全部待晨审追认）；V3 真机走查待人工
+实测数字：check exit=0 · test 44/44 · audit 44/44 · 探针 54/54+13/13+10/10 · 试验快照 220 条三处对账一致 · tgz 57 文件
+阻塞：V3 待人工（宿主 a11y/HTTP 均不可驱动）；M5 子代理配额中断一次已由主代理收尾
+下一步（晨审）：① 追认六项默认值 ② 换品牌名（DuctPal 撞 PBC）③ 执行 M7 tag/release ④ M8 BACKLOG PR ⑤ V3 人眼走查
