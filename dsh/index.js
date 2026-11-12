@@ -10,8 +10,10 @@ export const Config = Schema.object({
 })
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 
-export function apply(ctx) {
+export function apply(ctx, config) {
   if (!ctx.webServer?.register) throw new Error('Desktop webServer.register is unavailable')
+  const root = config?.root
+  // root 缺失不是错误——它是「还没选资料目录」的正常状态；M5 服务端将据此退回只读演示。
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact', path: '/api/psc/health',
     handler(req, res) {
@@ -23,7 +25,7 @@ export function apply(ctx) {
       const rejection = ctx.connection.requestRejection(req)
       if (rejection !== undefined) return send(rejection, { error: 'Authentication required' })
       if (req.method !== 'GET') return send(405, { error: 'Method not allowed' })
-      send(200, { ok: true, version: manifest.version, apiVersion: 'v1', capabilities: ['health'] })
+      send(200, { ok: true, version: manifest.version, apiVersion: 'v1', capabilities: ['health'], dataDirConfigured: Boolean(root) })
     },
   }), 'psc health')
 }
