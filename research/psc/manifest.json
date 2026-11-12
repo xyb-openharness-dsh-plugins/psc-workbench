@@ -1,6 +1,6 @@
 {
-  "topic": "pbc",
-  "disease": "原发性胆汁性胆管炎（Primary Biliary Cholangitis, PBC）",
+  "topic": "psc",
+  "disease": "原发性硬化性胆管炎（Primary Sclerosing Cholangitis, PSC）",
   "year": "2026",
   "snapshotDate": "2026-11-13",
   "tool": "unified-trial-mcp @ /Users/qinxiaoqiang/Downloads/unified_search_trials/dist/src/cli/main.js",
@@ -98,7 +98,9 @@
       "sha256": "9dad522c288ee88f9f089b3706fe382d3df3061dda6b467882d7e054bcab2c47"
     },
     "psc_trials_2026.sqlite": {
-      "sha256": "7ce498808db69f9f7f2f270f0afce660f4b886b67d04d0a7ec56dcf16f8cf46d"
+      "sha256": "1ba360a5b9457f2727922348e464c289db33593095d508ba003a5379b79dad67",
+      "bytes": 176128
     }
-  }
+  },
+  "sourceStatusRows": 48
 }

@@ -1,0 +1,14 @@
+{
+  "target": ".",
+  "package": "@xyb-community/psc-workbench",
+  "version": "0.2.0",
+  "pass": true,
+  "summary": {
+    "checks": 44,
+    "ok": 44,
+    "fail": 0,
+    "warn": 0
+  },
+  "fails": [],
+  "warns": []
+}

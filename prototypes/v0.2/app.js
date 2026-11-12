@@ -1169,6 +1169,15 @@
             : '<p class="muted">这一层没有结果。</p>'}
         </div>`).join('') : ''}
       ${m && !m.available ? `<div class="card"><p class="muted">${esc(m.reason)}</p></div>` : ''}
+      <div class="card">
+        <div class="card-head"><span class="card-title">按关键词检索本机快照</span><span class="muted">只查标题；不是全库扫描</span></div>
+        <div class="field"><label for="trial-kw"><span>关键词（题目包含）</span><input type="search" id="trial-kw" placeholder="如 PSC / 瘙痒 / 熊去氧胆酸 / 胆管炎"></label></div>
+        <div class="actions-row" style="margin-top:8px">
+          <button class="btn" type="button" id="do-search">按关键词检索</button>
+          <span class="muted">检索本机快照内标题包含该词的条目；候选池口径见上</span>
+        </div>
+        <div id="trial-kw-results" style="margin-top:10px"></div>
+      </div>
       ${trialDossierCard(p)}
       <div class="card">
         <div class="card-head"><span class="card-title">口径</span></div>
@@ -1273,7 +1282,7 @@
         state.chartCodes = state.chartCodes.filter((c) => c !== code)
       } else if (state.chartCodes.length >= 5) {
         toast('最多同时看 5 条线')
-        return
+        return render() /* 拒绝分支也要重渲染：按钮无原生勾选态可回弹，但"已选 N/M"徽标要保持与状态一致 */
       } else {
         state.chartCodes = state.chartCodes.concat(code)
       }
@@ -1331,7 +1340,15 @@
     const rejectCand = $('#reject-cand')
     if (rejectCand) rejectCand.addEventListener('click', () => toast('已全部拒收，未改动任何记录'))
     const doSearch = $('#do-search')
-    if (doSearch) doSearch.addEventListener('click', () => toast('演示：真实检索在 M4 接 unified-trial-mcp'))
+    if (doSearch) doSearch.addEventListener('click', () => {
+      const kw = ($('#trial-kw')?.value || '').trim()
+      const out = $('#trial-kw-results')
+      const pool = (profile().trials || [])
+      const rows = kw ? pool.filter((t) => (t.title || '').includes(kw)) : pool
+      out.innerHTML = rows.length
+        ? `<ul class="list">${rows.map((t) => `<li><span class="muted">${esc(t.source || '')} · ${esc(t.status || '登记状态，未核实')}</span> <b>${esc(t.title)}</b></li>`).join('')}</ul><p class="muted" style="margin-top:6px">共 ${rows.length} 条命中（本机快照 ${pool.length} 条内）；登记 ≠ 有效 ≠ 安全 ≠ 可入组。</p>`
+        : `<div class="empty">没有命中的登记。换关键词试试；查不到不等于不存在（快照只含本机已载入条目）。</div>`
+    })
     const doExport = $('#do-export')
     if (doExport) doExport.addEventListener('click', () => {
       const p = profile()
