@@ -1,0 +1,6 @@
+- insert:
+    - id: psc-main
+      name: "@xyb-community/psc-workbench"
+      # 接线前置：宿主把业务资料根目录指向 dshHomePath('psc')
+      config:
+        root: !!js dshHomePath('psc')
