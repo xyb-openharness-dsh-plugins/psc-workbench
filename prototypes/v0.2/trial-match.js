@@ -248,3 +248,6 @@ export function criteriaOf(trial) {
   })
   return out
 }
+
+/* 闸门符号别名：35 号匹配模块的统一入口名（check-trial-matching TRIGGER 靠它识别匹配实现本体）。 */
+export { matchTrial as trialMatch };

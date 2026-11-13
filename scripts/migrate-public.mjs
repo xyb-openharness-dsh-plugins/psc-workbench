@@ -41,7 +41,29 @@ const BOOT_BLOCK = `
    file:// 与拉取失败回退演示数据并明示「未连接服务」：不裸 throw、不白屏。 */
 ;(function () {
   var apiBase = "__API_BASE__"; /* 令牌会被宿主注入成字符串字面量；禁止把令牌挂在 window 对象上（注入后会语法错误） */
-  if (location.protocol === 'file:') return; /* 独立双击打开：走演示态，未接通后端，页面已明说 */
+  function demoToast(msg) {
+    var t = document.getElementById('toast')
+    if (!t) return
+    t.textContent = msg
+    t.hidden = false
+    setTimeout(function () { t.hidden = true }, 3600)
+  }
+  if (location.protocol === 'file:') {
+    /* 独立双击打开：走演示态，未接通后端，页面已明说。档案入口保留但明说不能落库。 */
+    var demoActions = document.querySelector('.actions')
+    if (demoActions) {
+      var demoBtn = document.createElement('button')
+      demoBtn.type = 'button'
+      demoBtn.className = 'btn ghost'
+      demoBtn.textContent = '＋ 新建档案'
+      demoBtn.addEventListener('click', function (e) {
+        e.stopPropagation()
+        demoToast('演示态：新建档案要连接本机数据库后才能保存；在 DSH Desktop 里打开工作台即可新建。')
+      })
+      demoActions.insertBefore(demoBtn, demoActions.firstChild)
+    }
+    return
+  }
   function offlineBanner() {
     document.body.insertAdjacentHTML('afterbegin',
       '<div role="status" style="background:#FBF1DF;color:#A8681E;padding:10px 14px;border-bottom:1px solid #E6CDA4">'
@@ -56,7 +78,10 @@ const BOOT_BLOCK = `
     window.DEMO.trialMatch = b.trialMatch || {}
     var app = window.__PSC_APP__
     if (app && app.render) {
-      var first = b.profiles[0]
+      /* 当前档案跨刷新保持：新建/切换过档案后，刷新不能静默跳回第一份 */
+      var savedKey = null
+      try { savedKey = localStorage.getItem('psc.profileKey') } catch (e) {}
+      var first = (savedKey && b.profiles.find(function (p) { return p.key === savedKey })) || b.profiles[0]
       app.state.profileKey = first.key
       app.state.view = 'dashboard'
       app.state.sub = 'overview'
@@ -71,6 +96,8 @@ const BOOT_BLOCK = `
     offlineBanner()
     console.warn('[psc] bootstrap 不可用，继续使用演示数据：', String(e && e.message || e))
   })
+
+  function rememberProfile(key) { try { localStorage.setItem('psc.profileKey', key) } catch (e) {} }
 
   /* 档案列表从服务端来（含本机新建档案，profile_key 随行）；demo 的 A/B 与本机档案并存 */
   fetch(apiBase + '/subjects').then(function (r) {
@@ -98,6 +125,7 @@ const BOOT_BLOCK = `
     var next = list[(idx + 1) % list.length]
     app.state.profileKey = next.key
     app.state.localSymptoms = []
+    rememberProfile(next.key)
     app.render()
     var footer = document.getElementById('footer-profile')
     if (footer && next.label) footer.textContent = next.label
@@ -127,6 +155,7 @@ const BOOT_BLOCK = `
       }
       var p = emptyProfile(r.body.profileKey, r.body.name || name.trim())
       window.DEMO.profiles.push(p)
+      rememberProfile(p.key)
       var app = window.__PSC_APP__
       if (app && app.render) {
         app.state.profileKey = p.key
@@ -151,6 +180,111 @@ const BOOT_BLOCK = `
     addBtn.addEventListener('click', function (e) { e.stopPropagation(); createSubject() })
     actions.insertBefore(addBtn, actions.firstChild)
   }
+
+  /* ── 记录写入（八个 kind 双通道）：API 在 → 走库 + 重载；API 不在 → 原型演示态照常 ──
+     保存成功 toast 逐字「已保存到本机数据库」；失败逐字显示原因，不静默、不假装已保存。 */
+  function toastPSC(msg) {
+    var t = document.getElementById('toast')
+    if (!t) return
+    t.textContent = msg
+    t.hidden = false
+    setTimeout(function () { t.hidden = true }, 3600)
+  }
+  function apiPost(path, body) {
+    return fetch(apiBase + path, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    }).then(function (r) {
+      return r.json().then(function (b) { return { ok: r.ok, body: b } })
+    })
+  }
+  function refreshBootstrap(keepView) {
+    return fetch(apiBase + '/bootstrap').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      return r.json()
+    }).then(function (b) {
+      if (!b || !Array.isArray(b.profiles) || !b.profiles.length) throw new Error('bootstrap 形状不符')
+      window.DEMO.profiles = b.profiles
+      window.DEMO.trialMatch = b.trialMatch || {}
+      var app = window.__PSC_APP__
+      if (app && app.render) {
+        app.state.localSymptoms = []
+        if (keepView) { app.render() } else { app.state.view = 'dashboard'; app.state.sub = 'overview'; app.render() }
+      }
+    })
+  }
+  /* 捕获阶段拦截 demo 保存按钮：API 态停掉内存分支，走库后重载读模型；
+     演示态（无 API）直接放行，让原型自己的「演示：不落库」分支照常执行。 */
+  function hookWrite(selector, build) {
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest && e.target.closest(selector)
+      if (!btn) return
+      if (window.__PSC_API_BASE__ == null) return
+      var app = window.__PSC_APP__
+      var payload = null
+      try { payload = build(btn) } catch (err) { toastPSC('先填好再保存：' + (err && err.message || err)); e.stopPropagation(); return }
+      if (payload == null) return
+      e.stopPropagation()
+      apiPost('/subjects/' + encodeURIComponent(app.state.profileKey) + '/' + payload.kind, payload.data)
+        .then(function (r) {
+          if (!r.ok || !r.body || !r.body.ok) throw new Error((r.body && r.body.detail) || (r.body && r.body.error) || ('HTTP ' + r.status))
+          return refreshBootstrap(true).then(function () { toastPSC('已保存到本机数据库'); if (payload.after) payload.after(app) })
+        })
+        .catch(function (err) { toastPSC('保存失败，没有写入：' + (err && err.message || err)) })
+    }, true)
+  }
+  function localTodayPSC() {
+    var d = new Date()
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  }
+  /* 痒与累（mind → symptom_notes） */
+  hookWrite('#save-itch', function () {
+    var itchEl = document.getElementById('itch')
+    if (!itchEl) return null
+    var app = window.__PSC_APP__
+    return { kind: 'mind', data: {
+      kind: 'itch', itch: Number(itchEl.value),
+      nightWorse: document.getElementById('night') && document.getElementById('night').checked ? 1 : 0,
+      sleepBreaks: app && app.state && app.state.draft && app.state.draft.sleepBreaks,
+      fatigue: app && app.state && app.state.draft ? app.state.draft.fatigue : null,
+      note: (document.getElementById('note') || {}).value || null,
+      recordedOn: localTodayPSC(),
+    }, after: function (app2) { app2.state.view = 'symptoms'; app2.state.sub = 'log'; app2.render() } }
+  })
+  /* 筛查随访（screening → screening_records） */
+  hookWrite('#save-screening', function (btn) {
+    var result = (document.getElementById('scr-result') || {}).value
+    if (!result || !result.trim()) { toastPSC('先照抄一句报告原文（工作台只抄写，不判断）'); return null }
+    return { kind: 'screening', data: {
+      kind: btn.getAttribute('data-screening'),
+      doneOn: (document.getElementById('scr-date') || {}).value || null,
+      result: result.trim(),
+      plan: (document.getElementById('scr-detail') || {}).value || null,
+    } }
+  })
+  /* 就诊问题（question → visit_questions） */
+  hookWrite('#add-q', function () {
+    var v = (document.getElementById('new-q') || {}).value
+    if (!v || !v.trim()) { toastPSC('先写一条问题'); return null }
+    return { kind: 'question', data: { question: v.trim() } }
+  })
+  /* 私密切换（POST /privacy 落库 + 重载；乐观更新，失败回退提示） */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('[data-privacy]')
+    if (!btn) return
+    if (window.__PSC_API_BASE__ == null) return
+    e.stopPropagation()
+    var wasPressed = btn.getAttribute('aria-pressed') === 'true'
+    var next = !wasPressed
+    var app = window.__PSC_APP__
+    apiPost('/privacy', { profileKey: app.state.profileKey, kind: 'mind', id: btn.getAttribute('data-privacy'), private: next })
+      .then(function (r) {
+        if (!r.ok || !r.body || !r.body.ok) throw new Error((r.body && r.body.detail) || (r.body && r.body.error) || ('HTTP ' + r.status))
+        return refreshBootstrap(true).then(function () { toastPSC(next ? '已标记私密（只对你可见，三处出口都不含）' : '已恢复共享') })
+      })
+      .catch(function (err) { toastPSC('私密切换失败，保持原状：' + (err && err.message || err)) })
+  }, true)
 })();`
 
 function migrateIndex(s) {

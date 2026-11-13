@@ -39,3 +39,39 @@
 - **GitHub 443 抖动**：DNS 解析失活 IP，克隆/推送多次重试成功（路径错换路径，不计重试上限）。
 - **C4/C8**（治疗节点开关/时间窗）：原型无对应控件，如实跳过；MT14 压测未做。
 - **并发与配额限制**：免费档单并发（家族对比子代理因并发失败改由主代理完成）；M5 移植子代理跑至大半后因配额超限中断（dsh/src/lib/public/test 已大面积落地），由主代理补齐收尾（试验链关键词检索、check 链全链、CHANGELOG 0.2.0、audit 4 项修复）。
+
+---
+
+# 晨审报告 · 2026-11-14 夜班（验收加固轮 · 续跑 psc-workbench）
+
+## 1. 一句话结论
+
+续跑 2026-11-13 已认领的 psc-workbench（issue #73，不重复认领不重建仓），完成验收加固轮 0.2.0→0.2.1：
+三条不可让步全过、五件门禁全绿且 self-test 全能红、记录写入闭环补齐、0.2.1 已装入 live profile——未停闸。
+
+## 2. 原型审查入口
+
+- 打开方式：`python3 -m http.server` 于仓根，访问 `/prototypes/v0.2/index.html`（file:// 双击亦可，演示态）。
+- 截图位置：/tmp/psc-inspect/（12 张运行态巡检，1280×860）；README 仍为上轮 7 张实渲截图（0.2.1 新增面截图待补，见 ACCEPTANCE §7.4）。
+- 清单：docs/ACCEPTANCE-2026-11-14.md（D2 体检四态 + D3 修复清单 + 复跑数字）。
+
+## 3. 自动签认清单（全部待晨审追认）
+
+- 本轮无新闸口签认；V2 复验（装机 0.2.1 到 harness/profiles/web）为实测，非签认。
+- 上轮遗留自动签认（G1/G2/G3/V1/V2）继续待追认。
+
+## 4. 待用户决策项（≤3）
+
+1. **实机三条**：完整退出并重开 DSH Desktop → 点「AI 对话」「配置目录」「＋ 新建档案」，回填结果后跑 `node scripts/verify-desktop-load.mjs`。
+2. **默认值追认**：上轮六项默认值 + 本轮两条（当前档案 localStorage 持久化、来源口径 220/148 两数分列展示）。
+3. **冻结项放行**：M7 tag/release 与 M8 BACKLOG 回填 PR 仍冻结在 docs/release-draft/，需明确授权才执行。
+
+## 5. 消耗
+
+- 时长：约 2.5 小时（23:0x 开工）。token：以客户端可见数据为准（本代理未取得，写未取得）。
+
+## 6. 未验证与异常
+
+- V3 实机走查未做（代理不重启 Desktop）——装机加载、实机点击均为未验证。
+- GitHub 网络间歇抖动：git fetch/push 两次超时，本地 commit 全部落盘，push 收班重试（路径错，不计失败重试上限）。
+- 无外部通道 FAILED 新增；上轮 chictr_online failed / pancreatic_archive unconfigured 如实随快照口径展示。

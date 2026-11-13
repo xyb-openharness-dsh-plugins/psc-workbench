@@ -835,18 +835,22 @@
       <div class="card">
         <div class="card-head"><span class="card-title">我的记录</span><span class="muted">共 ${list.length} 条</span></div>
         <ul class="list">
-          ${list.map((s) => {
+          ${list.map((s, i) => {
             const lab = profile().labs.find((r) => r.date === s.date)
-            const alp = lab ? lab.items.find((i) => i.code === 'ALP') : null
+            const alp = lab ? lab.items.find((i2) => i2.code === 'ALP') : null
             /* 没记的字段写"未记"，不能直接插值：`null` 会原样打出来变成「痒 null/10」，
                患者会以为记录坏了；而「0 分」与「没记」在复诊回顾里是两件事，不能都显示成 0。 */
             const itchTxt = s.itch == null ? '痒 未记' : `痒 ${s.itch}/10`
             const fatTxt = s.fatigue == null ? '累 未记' : `累 ${s.fatigue}/3`
             const sleepTxt = s.sleepBreaks == null ? '' : ` · 睡被打断 ${s.sleepBreaks} 次`
+            const isPriv = s.visibility === 'private'
+            const privBtn = `<button class="pill grey" type="button" data-privacy="mind${i + 1}" aria-pressed="${isPriv}"
+              title="私密标记后：看板摘要 / 导出 / AI 上下文三处都不含这条">${isPriv ? '已私密（点此恢复共享）' : '设为私密'}</button>`
             return `<li><span class="time">${esc(s.date)}</span><span>
               <b>${itchTxt} · ${fatTxt}</b>${s.nightWorse ? ' · 夜间重' : ''}${s.scratch ? ' · 抓破' : ''}${sleepTxt}
               ${s.note ? `<br><span class="muted">${esc(s.note)}</span>` : ''}
               <br><span class="muted">同日指标：${alp ? `ALP ${alp.value} U/L（${alp.refHigh ? pct(alp.value / alp.refHigh) + '×ULN' : '无上限'}）` : '当天没有化验'}</span>
+              <br>${privBtn}
             </span></li>`
           }).join('')}
         </ul>
@@ -1233,17 +1237,38 @@
       </div>`
   }
 
+  /* 临床数据库快照口径（设置 tab 与「来源说明」子页共用同一份数据、同一份文案）。
+     数据来自 demo/build-demo-data.mjs 从 research/psc/manifest.json 抄录的 snapshotMeta：
+     逐通道终态原样展示，FAILED/TIMEOUT/未配置 不算「查过」，也不写成 0 条结果。 */
+  function snapshotStateLabel(s) {
+    return { ready: '已查询（ready）', truncated: '查询被截断（truncated，只取到上限条数）', failed: '查询失败（failed，不算查过）', unconfigured: '未配置（unconfigured，不代表没有研究）', no_results: '查了、没有命中（no_results）' }[s] || s
+  }
+  function trialSourcesHtml() {
+    const meta = (typeof DEMO !== 'undefined' && DEMO.snapshotMeta) || null
+    if (!meta) {
+      return '<p class="muted">快照元信息未载入：本机没有已采集的临床研究快照。查不到不等于没有研究。</p>'
+    }
+    const rows = (meta.sources || []).map((s) => `<li><span class="time">${esc(s.id)}</span><span>${esc(snapshotStateLabel(s.state))}${s.queried != null ? ` · 查询请求 ${esc(String(s.queried))} 次` : ''}</span></li>`).join('')
+    return `
+      <p style="margin:0 0 6px">快照日期 <b>${esc(meta.snapshotDate ?? '未记')}</b> · 已载 <b>${esc(String(meta.recordCount ?? 0))}</b> 条 · 标题含本病关键词 <b>${esc(String(meta.relevant ?? '?'))}</b> 条。<b>不是全库扫描</b>——检索词命中才进池，通道召回有限。</p>
+      <ul class="list">${rows}</ul>
+      <p class="muted" style="margin-top:8px">${esc(meta.honestyNote || '')}登记 ≠ 有效 ≠ 安全 ≠ 可入组；状态一律「登记状态，未核实」。</p>`
+  }
+
   function vTrialsSources() {
     return `
       <div class="card">
         <div class="card-head"><span class="card-title">来源说明</span></div>
+        ${trialSourcesHtml()}
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">通道清单</span></div>
         <ul class="list">
           <li><span class="time">ictrp</span><span>WHO ICTRP（全球广度）</span></li>
           <li><span class="time">ctv</span><span>ClinicalTrials.gov 深度索引</span></li>
-          <li><span class="time">chictr</span><span>ChiCTR 实时</span></li>
-          <li><span class="time">cde</span><span>药物临床试验登记与信息公示平台（含 PI）</span></li>
+          <li><span class="time">chinadrugtrials</span><span>药物临床试验登记与信息公示平台（中国）</span></li>
+          <li><span class="time">chictr_online</span><span>ChiCTR（中国注册库；当前通道终态见上表，failed 不算查过）</span></li>
         </ul>
-        <p class="muted" style="margin-top:8px">离线语料当前未配置，PSC 属「未配置」状态——查不到不等于不存在。</p>
       </div>`
   }
 
@@ -1331,6 +1356,23 @@
       if (!v) return toast('先写一条问题')
       profile().questions.push({ id: 'q' + Date.now(), text: v, done: false })
       toast('已加入清单')
+      render()
+    })
+    /* 私密切换：demo 态明说「不落库」；开发版由双通道接管（POST /privacy 写库 + 重载）。 */
+    const privBtn = $('[data-privacy]')
+    if (privBtn) privBtn.addEventListener('click', () => toast('演示态：私密标记只在开发版里写入本机数据库'))
+    /* 筛查随访「记一次结果」：demo 态只进内存（与痒/累同一口径）；
+       开发版由 migrate-public 注入的双通道接管（API 在 → 落 sqlite）。 */
+    const saveScr = $('[data-screening]')
+    if (saveScr) saveScr.addEventListener('click', () => {
+      const kind = saveScr.getAttribute('data-screening')
+      const result = $('#scr-result')?.value.trim()
+      if (!result) return toast('先照抄一句报告原文（工作台只抄写，不判断）')
+      const date = $('#scr-date')?.value || null
+      const detail = $('#scr-detail')?.value.trim() || null
+      const titles = { colonoscopy: '肠镜（共病）', mrcp: 'MRCP（胆管成像）', fibroscan: '弹性（肝纤维化）', gallbladder: '胆囊', endoscopy: '胃镜' }
+      profile().screening.push({ type: kind, date, result, detail, sectionTitle: titles[kind] || '' })
+      toast('已记下这一次（演示：仅本页内存，不落库）')
       render()
     })
     const pick = $('#pick-file')
@@ -1557,7 +1599,96 @@
   }
   function clampAgentWidth(w) { return Math.max(25, Math.min(45, Math.round(w))) }
 
+  /* ------------------------------ 设置弹层（三 tab） ------------------------------
+     家族标准：工作区 / 文档解析（MinerU）/ 临床数据库。固定外壳：标题与关闭常显，内容区滚动。
+     原型态各值为示意并明说；开发版由 lib/client.js 面板与 /root 接口接真值。 */
+  function openSettings(initialTab) {
+    const tabs = [
+      ['workspace', '工作区'],
+      ['mineru', '文档解析（MinerU）'],
+      ['clinical', '临床数据库'],
+    ]
+    let cur = tabs.some((t) => t[0] === initialTab) ? initialTab : 'workspace'
+    const layer = document.createElement('div')
+    layer.className = 'pv-overlay'
+    layer.setAttribute('role', 'dialog')
+    layer.setAttribute('aria-modal', 'true')
+    layer.setAttribute('aria-label', '设置')
+    layer.innerHTML = `
+      <div class="pv-panel">
+        <div class="pv-head"><h2 style="margin:0;font-size:20px">设置</h2>
+          <div class="pv-head-actions">
+            <button class="btn ghost" type="button" data-cfg-back>返回</button>
+            <button class="icon-btn" type="button" data-cfg-close aria-label="关闭设置">✕</button>
+          </div>
+        </div>
+        <div class="cfg-tabs" role="tablist" aria-label="设置分区">
+          ${tabs.map(([id, label]) => `<button class="cfg-tab" type="button" role="tab" id="cfg-tab-${id}" aria-selected="${id === cur}" aria-controls="cfg-panel-${id}" data-cfg-tab="${id}">${esc(label)}</button>`).join('')}
+        </div>
+        <div class="pv-body">
+          <section id="cfg-panel-workspace" role="tabpanel" aria-labelledby="cfg-tab-workspace" ${cur === 'workspace' ? '' : 'hidden'}>
+            <div class="card">
+              <div class="card-head"><span class="card-title">业务资料根目录</span><span class="muted">示意值 · 开发版里真选</span></div>
+              <p style="margin:0 0 6px"><code id="cfg-root-value">（未连接宿主：开发版点顶栏「配置目录」选择真实目录）</code></p>
+              <p class="muted" style="margin:0">以下位置一律不当资料目录：主目录本身 / 桌面 / 下载根目录 / tmp（客户端与服务端各判一遍）。请选一个专用文件夹，里面的原件与数据库都在这一处。</p>
+            </div>
+            <div class="card">
+              <div class="card-head"><span class="card-title">目录体积（示意）</span></div>
+              <ul class="list">
+                <li><span class="time">原件</span><span>PDF / 照片原文件，不进数据库</span></li>
+                <li><span class="time">派生</span><span>解析产物与导出快照，可随时重生成</span></li>
+                <li><span class="time">数据库</span><span>单个 sqlite 文件，整目录复制即备份</span></li>
+              </ul>
+              <p class="muted" style="margin:0">备份与恢复 = 复制 / 还原整个资料目录；换目录时工作台会先开新库成功再切换，失败退回原目录。</p>
+            </div>
+          </section>
+          <section id="cfg-panel-mineru" role="tabpanel" aria-labelledby="cfg-tab-mineru" ${cur === 'mineru' ? '' : 'hidden'}>
+            <div class="card">
+              <div class="card-head"><span class="card-title">云端解析（MinerU）</span><span class="badge">未接入</span></div>
+              <p class="notice" style="margin:0 0 8px">本仓未接入 MinerU：下面的勾选与保存<b>不联网、不上传、不调用</b>；接入后每次解析前都会先让你确认「原件将上传」。</p>
+              <label class="field"><span><input type="checkbox" id="cfg-mineru-consent"> 我同意把选中的报告原件上传到 MinerU 云端解析（接入后生效）</span></label>
+              <p class="muted" id="cfg-mineru-warn" style="margin:4px 0 8px">未勾选：不会上传、不会调用。</p>
+              <label class="field"><span>Token（掩码只显示后 4 位）</span><input type="password" id="cfg-mineru-token" placeholder="粘贴 Token" disabled></label>
+              <p class="muted" style="margin:4px 0 8px">解析模型固定 pipeline（不切 VLM）：同一份原件重复解析结果才可比。Flash 免费额度上限 10 MB / 20 页，超限自动降级为本地文本抽取并明说。</p>
+              <details><summary>如何申请 Token（4 步）</summary><ol><li>打开 MinerU 官网并注册登录</li><li>进入「API Token」页面</li><li>新建一个 Token 并复制</li><li>粘贴到上面输入框（只存本机资料目录，日志只出掩码）</li></ol></details>
+            </div>
+          </section>
+          <section id="cfg-panel-clinical" role="tabpanel" aria-labelledby="cfg-tab-clinical" ${cur === 'clinical' ? '' : 'hidden'}>
+            <div class="card">
+              <div class="card-head"><span class="card-title">临床研究快照</span><span class="badge">登记状态，未核实</span></div>
+              ${trialSourcesHtml()}
+            </div>
+          </section>
+        </div>
+      </div>`
+    document.body.appendChild(layer)
+    const closeBtn = layer.querySelector('[data-cfg-close]')
+    const backBtn = layer.querySelector('[data-cfg-back]')
+    const prevFocus = document.activeElement
+    const close = () => { layer.remove(); document.removeEventListener('keydown', onKey, true); if (prevFocus && prevFocus.focus) prevFocus.focus() }
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close() } }
+    document.addEventListener('keydown', onKey, true)
+    closeBtn.addEventListener('click', close)
+    backBtn.addEventListener('click', close)
+    layer.addEventListener('click', (e) => { if (e.target === layer) close() })
+    layer.querySelectorAll('[data-cfg-tab]').forEach((b) => b.addEventListener('click', () => {
+      cur = b.getAttribute('data-cfg-tab')
+      layer.querySelectorAll('[data-cfg-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b)))
+      layer.querySelectorAll('[role=tabpanel]').forEach((p) => { p.hidden = p.id !== 'cfg-panel-' + cur })
+    }))
+    const consent = layer.querySelector('#cfg-mineru-consent')
+    const token = layer.querySelector('#cfg-mineru-token')
+    const warn = layer.querySelector('#cfg-mineru-warn')
+    consent.addEventListener('change', () => {
+      token.disabled = !consent.checked
+      warn.textContent = consent.checked ? '已勾选（本仓未接入：仍不会上传、不会调用）。' : '未勾选：不会上传、不会调用。'
+    })
+    closeBtn.focus()
+  }
+
   function bindShell() {
+    const cfgBtn = $('#cfg-open')
+    if (cfgBtn) cfgBtn.addEventListener('click', () => openSettings('workspace'))
     $('#btn-ai').addEventListener('click', () => {
       if (window.parent === window) return toast('独立打开时没有会话面板：在 DSH Desktop 里打开工作台即可对话')
       try { window.parent.postMessage({ type: 'psc:agent-open' }, window.location.origin) } catch (e) { toast('没能请出会话面板') }
@@ -1711,7 +1842,29 @@ const ROUTES = {
    file:// 与拉取失败回退演示数据并明示「未连接服务」：不裸 throw、不白屏。 */
 ;(function () {
   var apiBase = "__API_BASE__"; /* 令牌会被宿主注入成字符串字面量；禁止把令牌挂在 window 对象上（注入后会语法错误） */
-  if (location.protocol === 'file:') return; /* 独立双击打开：走演示态，未接通后端，页面已明说 */
+  function demoToast(msg) {
+    var t = document.getElementById('toast')
+    if (!t) return
+    t.textContent = msg
+    t.hidden = false
+    setTimeout(function () { t.hidden = true }, 3600)
+  }
+  if (location.protocol === 'file:') {
+    /* 独立双击打开：走演示态，未接通后端，页面已明说。档案入口保留但明说不能落库。 */
+    var demoActions = document.querySelector('.actions')
+    if (demoActions) {
+      var demoBtn = document.createElement('button')
+      demoBtn.type = 'button'
+      demoBtn.className = 'btn ghost'
+      demoBtn.textContent = '＋ 新建档案'
+      demoBtn.addEventListener('click', function (e) {
+        e.stopPropagation()
+        demoToast('演示态：新建档案要连接本机数据库后才能保存；在 DSH Desktop 里打开工作台即可新建。')
+      })
+      demoActions.insertBefore(demoBtn, demoActions.firstChild)
+    }
+    return
+  }
   function offlineBanner() {
     document.body.insertAdjacentHTML('afterbegin',
       '<div role="status" style="background:#FBF1DF;color:#A8681E;padding:10px 14px;border-bottom:1px solid #E6CDA4">'
@@ -1726,7 +1879,10 @@ const ROUTES = {
     window.DEMO.trialMatch = b.trialMatch || {}
     var app = window.__PSC_APP__
     if (app && app.render) {
-      var first = b.profiles[0]
+      /* 当前档案跨刷新保持：新建/切换过档案后，刷新不能静默跳回第一份 */
+      var savedKey = null
+      try { savedKey = localStorage.getItem('psc.profileKey') } catch (e) {}
+      var first = (savedKey && b.profiles.find(function (p) { return p.key === savedKey })) || b.profiles[0]
       app.state.profileKey = first.key
       app.state.view = 'dashboard'
       app.state.sub = 'overview'
@@ -1741,6 +1897,8 @@ const ROUTES = {
     offlineBanner()
     console.warn('[psc] bootstrap 不可用，继续使用演示数据：', String(e && e.message || e))
   })
+
+  function rememberProfile(key) { try { localStorage.setItem('psc.profileKey', key) } catch (e) {} }
 
   /* 档案列表从服务端来（含本机新建档案，profile_key 随行）；demo 的 A/B 与本机档案并存 */
   fetch(apiBase + '/subjects').then(function (r) {
@@ -1768,6 +1926,7 @@ const ROUTES = {
     var next = list[(idx + 1) % list.length]
     app.state.profileKey = next.key
     app.state.localSymptoms = []
+    rememberProfile(next.key)
     app.render()
     var footer = document.getElementById('footer-profile')
     if (footer && next.label) footer.textContent = next.label
@@ -1797,6 +1956,7 @@ const ROUTES = {
       }
       var p = emptyProfile(r.body.profileKey, r.body.name || name.trim())
       window.DEMO.profiles.push(p)
+      rememberProfile(p.key)
       var app = window.__PSC_APP__
       if (app && app.render) {
         app.state.profileKey = p.key
@@ -1821,4 +1981,109 @@ const ROUTES = {
     addBtn.addEventListener('click', function (e) { e.stopPropagation(); createSubject() })
     actions.insertBefore(addBtn, actions.firstChild)
   }
+
+  /* ── 记录写入（八个 kind 双通道）：API 在 → 走库 + 重载；API 不在 → 原型演示态照常 ──
+     保存成功 toast 逐字「已保存到本机数据库」；失败逐字显示原因，不静默、不假装已保存。 */
+  function toastPSC(msg) {
+    var t = document.getElementById('toast')
+    if (!t) return
+    t.textContent = msg
+    t.hidden = false
+    setTimeout(function () { t.hidden = true }, 3600)
+  }
+  function apiPost(path, body) {
+    return fetch(apiBase + path, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    }).then(function (r) {
+      return r.json().then(function (b) { return { ok: r.ok, body: b } })
+    })
+  }
+  function refreshBootstrap(keepView) {
+    return fetch(apiBase + '/bootstrap').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status)
+      return r.json()
+    }).then(function (b) {
+      if (!b || !Array.isArray(b.profiles) || !b.profiles.length) throw new Error('bootstrap 形状不符')
+      window.DEMO.profiles = b.profiles
+      window.DEMO.trialMatch = b.trialMatch || {}
+      var app = window.__PSC_APP__
+      if (app && app.render) {
+        app.state.localSymptoms = []
+        if (keepView) { app.render() } else { app.state.view = 'dashboard'; app.state.sub = 'overview'; app.render() }
+      }
+    })
+  }
+  /* 捕获阶段拦截 demo 保存按钮：API 态停掉内存分支，走库后重载读模型；
+     演示态（无 API）直接放行，让原型自己的「演示：不落库」分支照常执行。 */
+  function hookWrite(selector, build) {
+    document.addEventListener('click', function (e) {
+      var btn = e.target && e.target.closest && e.target.closest(selector)
+      if (!btn) return
+      if (window.__PSC_API_BASE__ == null) return
+      var app = window.__PSC_APP__
+      var payload = null
+      try { payload = build(btn) } catch (err) { toastPSC('先填好再保存：' + (err && err.message || err)); e.stopPropagation(); return }
+      if (payload == null) return
+      e.stopPropagation()
+      apiPost('/subjects/' + encodeURIComponent(app.state.profileKey) + '/' + payload.kind, payload.data)
+        .then(function (r) {
+          if (!r.ok || !r.body || !r.body.ok) throw new Error((r.body && r.body.detail) || (r.body && r.body.error) || ('HTTP ' + r.status))
+          return refreshBootstrap(true).then(function () { toastPSC('已保存到本机数据库'); if (payload.after) payload.after(app) })
+        })
+        .catch(function (err) { toastPSC('保存失败，没有写入：' + (err && err.message || err)) })
+    }, true)
+  }
+  function localTodayPSC() {
+    var d = new Date()
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+  }
+  /* 痒与累（mind → symptom_notes） */
+  hookWrite('#save-itch', function () {
+    var itchEl = document.getElementById('itch')
+    if (!itchEl) return null
+    var app = window.__PSC_APP__
+    return { kind: 'mind', data: {
+      kind: 'itch', itch: Number(itchEl.value),
+      nightWorse: document.getElementById('night') && document.getElementById('night').checked ? 1 : 0,
+      sleepBreaks: app && app.state && app.state.draft && app.state.draft.sleepBreaks,
+      fatigue: app && app.state && app.state.draft ? app.state.draft.fatigue : null,
+      note: (document.getElementById('note') || {}).value || null,
+      recordedOn: localTodayPSC(),
+    }, after: function (app2) { app2.state.view = 'symptoms'; app2.state.sub = 'log'; app2.render() } }
+  })
+  /* 筛查随访（screening → screening_records） */
+  hookWrite('#save-screening', function (btn) {
+    var result = (document.getElementById('scr-result') || {}).value
+    if (!result || !result.trim()) { toastPSC('先照抄一句报告原文（工作台只抄写，不判断）'); return null }
+    return { kind: 'screening', data: {
+      kind: btn.getAttribute('data-screening'),
+      doneOn: (document.getElementById('scr-date') || {}).value || null,
+      result: result.trim(),
+      plan: (document.getElementById('scr-detail') || {}).value || null,
+    } }
+  })
+  /* 就诊问题（question → visit_questions） */
+  hookWrite('#add-q', function () {
+    var v = (document.getElementById('new-q') || {}).value
+    if (!v || !v.trim()) { toastPSC('先写一条问题'); return null }
+    return { kind: 'question', data: { question: v.trim() } }
+  })
+  /* 私密切换（POST /privacy 落库 + 重载；乐观更新，失败回退提示） */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('[data-privacy]')
+    if (!btn) return
+    if (window.__PSC_API_BASE__ == null) return
+    e.stopPropagation()
+    var wasPressed = btn.getAttribute('aria-pressed') === 'true'
+    var next = !wasPressed
+    var app = window.__PSC_APP__
+    apiPost('/privacy', { profileKey: app.state.profileKey, kind: 'mind', id: btn.getAttribute('data-privacy'), private: next })
+      .then(function (r) {
+        if (!r.ok || !r.body || !r.body.ok) throw new Error((r.body && r.body.detail) || (r.body && r.body.error) || ('HTTP ' + r.status))
+        return refreshBootstrap(true).then(function () { toastPSC(next ? '已标记私密（只对你可见，三处出口都不含）' : '已恢复共享') })
+      })
+      .catch(function (err) { toastPSC('私密切换失败，保持原状：' + (err && err.message || err)) })
+  }, true)
 })();

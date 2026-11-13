@@ -13,7 +13,7 @@
  * - 演示人名与数值全部虚构，页面必须显著标「合成示例」。
  * - PSC 边界：无分期/线序/疗效判读；发作—缓解区间带；阈值待核不入库；胆管癌风险只作筛查条目。
  */
-import { writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -295,12 +295,35 @@ export function buildDemoProfiles() {
 /* ------------------------------- 产物 1：ESM ------------------------------- */
 const HEADER = `/* 由 demo/build-demo-data.mjs 生成，勿手改。重跑：npm run demo:data */\n`
 
-export function renderDemoModule(profiles) {
+/* 快照元信息（设置 · 临床数据库 tab 与临床页卡头共用的同一口径，读 research/psc/manifest）。
+   relevant = 标题/研究类型里含本病关键词的条数——「已载 N」不等于「相关 N」，两数分开写。 */
+function snapshotMetaFromManifest() {
+  const manifestPath = join(ROOT, 'research', 'psc', 'manifest.json')
+  if (!existsSync(manifestPath)) return null
+  try {
+    const m = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    let relevant = null
+    try {
+      const lines = readFileSync(join(ROOT, 'research', 'psc', 'trials-2026.jsonl'), 'utf8').split('\n').filter(Boolean)
+      const RE = /硬化性胆管炎|sclerosing cholangitis|\bPSC\b/i
+      relevant = lines.filter((l) => { try { return RE.test(JSON.parse(l).title || '') } catch { return false } }).length
+    } catch { relevant = null }
+    return {
+      snapshotDate: m.snapshotDate ?? null,
+      recordCount: m.recordCount ?? null,
+      relevant,
+      sources: (m.sourceStates ?? []).map((s) => ({ id: s.source_id, state: s.state, queried: s.queried ?? null })),
+      honestyNote: m.honesty?.queriedMeaning ?? '只有 SUCCESS 与 NO_RESULTS 表示该来源真的被查询并给出答案；其余终态不代表「没有试验」',
+    }
+  } catch { return null }
+}
+
+export function renderDemoModule(profiles, snapshotMeta) {
   const trialMatch = Object.fromEntries(profiles.map((p) => [
     p.key,
     matchAll((p.trials ?? []).map((t) => ({ ...t, criteria: criteriaOf(t) })), factsOf(p)),
   ]))
-  const payload = JSON.stringify({ generatedAt: 'fixed-for-reproducibility', profiles, trialMatch }, null, 2)
+  const payload = JSON.stringify({ generatedAt: 'fixed-for-reproducibility', profiles, trialMatch, snapshotMeta: snapshotMeta ?? null }, null, 2)
   return `${HEADER}(function (root) {\n  const DEMO = ${payload}\n  root.DEMO = DEMO\n})(typeof window !== 'undefined' ? window : globalThis)\n`
 }
 
@@ -335,7 +358,7 @@ async function main() {
   const jsOut = join(ROOT, 'prototypes/v0.2/demo-data.js')
   const dbOut = join(ROOT, 'demo/demo-data.sqlite')
   mkdirSync(dirname(jsOut), { recursive: true })
-  writeFileSync(jsOut, renderDemoModule(profiles))
+  writeFileSync(jsOut, renderDemoModule(profiles, snapshotMetaFromManifest()))
   const dbResult = await buildDemoDatabase(dbOut, profiles)
   console.log(JSON.stringify({ ok: true, js: jsOut, db: dbOut, dbResult, profiles: profiles.length }, null, 2))
 }

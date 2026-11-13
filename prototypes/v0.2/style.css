@@ -388,6 +388,12 @@ html.pv-lock { overflow: hidden; }
 .pv-body { flex: 1; overflow: auto; overscroll-behavior: contain; padding: 16px; }
 .pv-head-actions button { min-height: 42px; }
 
+/* 设置弹层三 tab（工作区 / 文档解析 MinerU / 临床数据库） */
+.cfg-tabs { display: flex; gap: 8px; padding: 10px 16px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.cfg-tab { min-height: 42px; border: none; background: none; padding: 8px 14px; font: inherit; font-size: 14px; color: var(--ink-2); border-radius: 10px 10px 0 0; cursor: pointer; border-bottom: 3px solid transparent; }
+.cfg-tab[aria-selected="true"] { color: var(--brand); font-weight: 600; border-bottom-color: var(--brand); background: rgba(92,107,60,.08); }
+.cfg-tab:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
 /* 发作—缓解区间带（PSC 专属线） */
 .ep-band { height: 10px; border-radius: 6px; background: var(--brand-2); opacity: .55; max-width: 100%; }
 

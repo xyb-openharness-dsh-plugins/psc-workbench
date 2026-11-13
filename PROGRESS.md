@@ -31,3 +31,12 @@
 实测数字：check exit=0 · test 44/44 · audit 44/44 · 探针 54/54+13/13+10/10 · 试验快照 220 条三处对账一致 · tgz 57 文件
 阻塞：V3 待人工（宿主 a11y/HTTP 均不可驱动）；M5 子代理配额中断一次已由主代理收尾
 下一步（晨审）：① 追认六项默认值 ② 换品牌名（DuctPal 撞 PBC）③ 执行 M7 tag/release ④ M8 BACKLOG PR ⑤ V3 人眼走查
+
+## 2026-11-14 · 验收加固轮（0.2.0 → 0.2.1，夜班无人值守）
+
+当前里程碑：M0–M6 + M9 已完成之上，按 D1–D4 交付流水线完成验收加固轮
+已完成：三条不可让步全过（§2 五件门禁 exit 0 + self-test 全部能红）· 记录写入闭环补齐（addEntry 八 kind + setPrivacy 双寻址 + POST 路由 + 前端双通道，write-api 4/4 · probe PR1–PR4 API 态 4/4）· check-trial-matching 入链（trialMatch 别名 + starter 模板触发面升级回流 L111）· check-trial-snapshot 去 --if-present · 设置三 tab 弹层补齐 · 修复筛查保存无事件 / 刷新丢当前档案 / readJson 吞错 · 0.2.1 装入 Desktop live profile（sha256 c0737dc6…，bundles 76）
+实测：check exit=0（48/48）· audit 44/44 · m2 探针 54/54 · DP 10/10 · page-view 13/13 · PR 探针 5过/0红/3如实SKIP
+下一步（晨审）：① 用户完整退出重开 Desktop 后实机走查三条（AI 对话 / 配置目录 / ＋新建档案）+ verify-desktop-load ② 追认六项默认值与品牌名 ③ M7 tag/release、M8 BACKLOG PR（草稿在 docs/release-draft/，无授权不执行）④ F 组页面级录入表单补齐
+阻塞：无（V3 真机待人工为流程属性，非阻塞）
+闸口结论：V2 复验通过（装机 0.2.1）；V3 待人工

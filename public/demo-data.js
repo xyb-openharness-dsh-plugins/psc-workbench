@@ -1661,6 +1661,44 @@
         ]
       }
     ]
+  },
+  "snapshotMeta": {
+    "snapshotDate": "2026-11-13",
+    "recordCount": 220,
+    "relevant": 148,
+    "sources": [
+      {
+        "id": "chictr_online",
+        "state": "failed",
+        "queried": 0
+      },
+      {
+        "id": "chictr_pancreatic_archive",
+        "state": "unconfigured",
+        "queried": 0
+      },
+      {
+        "id": "chinadrugtrials",
+        "state": "ready",
+        "queried": 1
+      },
+      {
+        "id": "ctv",
+        "state": "ready",
+        "queried": 1
+      },
+      {
+        "id": "ictrp",
+        "state": "truncated",
+        "queried": 1
+      },
+      {
+        "id": "xyb_chinadrugtrials_archive",
+        "state": "ready",
+        "queried": 1
+      }
+    ],
+    "honestyNote": "只有 SUCCESS 与 NO_RESULTS 表示该来源真的被查询并给出答案；其余终态一律不代表\"没有试验\""
   }
 }
   root.DEMO = DEMO

@@ -92,11 +92,14 @@ export function checkDataDir(raw) {
 }
 
 function readJson(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let raw = '';
     req.on('data', (chunk) => { if (raw.length < 64 * 1024) raw += chunk; });
-    req.on('end', () => { try { resolve(JSON.parse(raw || '{}')); } catch { resolve({}); } });
-    req.on('error', () => resolve({}));
+    /* JSON 解析失败要可读（400 + detail），不能静默变 {} 让用户以为存成功了 */
+    req.on('end', () => {
+      try { resolve(JSON.parse(raw || '{}')); } catch (e) { reject(new Error('请求体不是合法 JSON：' + String(e.message || e))); }
+    });
+    req.on('error', () => reject(new Error('请求体读取失败')));
   });
 }
 
@@ -137,6 +140,30 @@ export function createHandler({ apiBase = '', publicDir, services }) {
         return sendJson(res, 405, { error: 'Method not allowed' });
       } catch (error) {
         return sendJson(res, 400, { error: '档案操作失败', detail: String(error.message || error) });
+      }
+    }
+
+    /* ---------- 记录写入（八个 kind）：POST /subjects/{key}/{kind} → addEntry 落库 ---------- */
+    const WRITE_MATCH = services.addEntry && pathname.match(new RegExp('^' + apiPrefix + '/subjects/([^/]+)/([a-z]+)$'));
+    if (WRITE_MATCH) {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+      try {
+        const body = await readJson(req);
+        const saved = services.addEntry(decodeURIComponent(WRITE_MATCH[1]), WRITE_MATCH[2], body);
+        return sendJson(res, 200, { ok: true, ...saved });
+      } catch (error) {
+        return sendJson(res, 400, { error: '写入失败', detail: String(error.message || error) });
+      }
+    }
+
+    /* ---------- 私密切换（落库）：POST /privacy {profileKey, kind, id, private} ---------- */
+    if (pathname === apiPrefix + '/privacy' && services.setPrivacy) {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+      try {
+        const b = await readJson(req);
+        return sendJson(res, 200, { ok: true, ...services.setPrivacy(b.profileKey, b.kind, b.id, !!b.private) });
+      } catch (error) {
+        return sendJson(res, 400, { error: '私密切换失败', detail: String(error.message || error) });
       }
     }
 

@@ -50,6 +50,7 @@ export function createHostHandler(ctx, workbench) {
     capabilities: [
       'bootstrap', 'profile', 'health', 'subjects', 'labs', 'episodes', 'screening', 'imaging',
       'meds', 'symptoms', 'reports', 'viewpoints', 'documents', 'trials', 'saved-trials', 'data-root',
+      'write', 'privacy',
     ],
     bootstrap: () => workbench.bootstrap(),
     profile: (key) => workbench.profile(key),
@@ -63,6 +64,9 @@ export function createHostHandler(ctx, workbench) {
     listSubjects: () => workbench.subjects(),
     createSubject: (input) => workbench.createSubject(input),
     deleteSubject: (key) => workbench.deleteSubject(key),
+    /* 记录写入（八个 kind）与私密切换：demo 之外可真写 sqlite（宿主与独立启动同一条路径） */
+    addEntry: (key, kind, data) => workbench.addEntry(key, kind, data),
+    setPrivacy: (key, kind, id, priv) => workbench.setPrivacy(key, kind, id, priv),
     /* 单实体读法（无判读列直出；私密标记随行返回） */
     entities: (name, key) => {
       workbench.open();
